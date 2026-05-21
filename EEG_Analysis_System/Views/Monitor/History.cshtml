@@ -1,0 +1,142 @@
+﻿@model IEnumerable<EEG_Analysis_System.Models.AnalysisResult>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📊 Archiwum i analityka EEG</h2>
+
+        <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <span class="text-muted fw-bold">Eksport:</span>
+                <div class="btn-group shadow-sm">
+                    <a asp-action="ExportCSV" class="btn btn-success btn-sm">CSV</a>
+                    <a asp-action="ExportJSON" class="btn btn-warning btn-sm">JSON</a>
+                    <a asp-action="ExportPDF" class="btn btn-danger btn-sm">PDF</a>
+                </div>
+            </div>
+
+            <form asp-action="ClearHistory" method="post" onsubmit="return confirm('Czy na pewno usunąć wszystkie zapisy?');">
+                <button type="submit" class="btn btn-outline-danger btn-sm">🗑 Wyczyść</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Typ analizy</label>
+                    <select name="searchType" class="form-select">
+                        <option value="">Wszystkie stany</option>
+                        <option value="Aktywność" selected="@(ViewBag.SelectedType == "Aktywność" ? "selected" : null)">Aktywność</option>
+                        <option value="Spokój" selected="@(ViewBag.SelectedType == "Spokój" ? "selected" : null)">Spokój</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data badania</label>
+                    <input type="date" name="searchDate" class="form-control" value="@ViewBag.SelectedDate" lang="en-US">
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">🔍 Filtruj</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @if (Model != null && Model.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header">Rozkład stanów mózgu</div>
+                    <div class="card-body">
+                        <canvas id="statsChart" style="max-height: 250px;"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header">Informacje ogólne</div>
+                    <div class="card-body">
+                        <p>Liczba wpisów: <strong>@Model.Count()</strong></p>
+                        <p>Średnia pewność AI: <strong>@(Math.Round(Model.Average(m => m.Confidence) * 100, 1))%</strong></p>
+                        <p>Najczęstszy stan: <strong>@Model.GroupBy(m => m.ResultType).OrderByDescending(g => g.Count()).First().Key</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Czas</th>
+                            <th>Stan</th>
+                            <th>Dokładność</th>
+                            <th>Notatka</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                @* Час і дата (формат 24г) *@
+                                <td>@item.CreatedAt.ToString("HH:mm:ss (dd.MM)")</td>
+
+                                @* Стан (Badge) *@
+                                <td>
+                                    <span class="badge @(item.ResultType == "Aktywność" ? "bg-primary" : "bg-success")">
+                                        @item.ResultType
+                                    </span>
+                                </td>
+
+                                @* Точність (без зайвого множення) *@
+                                <td>@(Math.Round(item.Confidence * 100, 1))%</td>
+
+                                @* Нотатки польською *@
+                                <td><small>@item.Notes</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-warning text-center">Nie znaleziono zapisów spełniających kryteria.</div>
+    }
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const ctx = document.getElementById('statsChart').getContext('2d');
+
+    // Оновлені назви для підрахунку даних (мають збігатися з тими, що в базі)
+        const activityCount = @Model.Count(m => m.ResultType == "Aktywność" || m.ResultType == "Активність");
+    const peaceCount = @Model.Count(m => m.ResultType == "Spokój" || m.ResultType == "Спокій");
+
+    // Перевірка в консолі браузера (натисніть F12), щоб побачити чи приходять цифри
+    console.log("Activity:", activityCount, "Peace:", peaceCount);
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Aktywność', 'Spokój'],
+            datasets: [{
+                data: [activityCount, peaceCount],
+                backgroundColor: ['#0d6efd', '#198754'],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            }
+        }
+    });
+</script>
